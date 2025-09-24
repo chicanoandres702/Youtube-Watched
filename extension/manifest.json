@@ -1,0 +1,17 @@
+{
+  "manifest_version": 3,
+  "name": "Cookie Saver",
+  "version": "1.0",
+  "description": "Saves cookies from YouTube.",
+  "permissions": [
+    "cookies",
+    "storage",
+    "tabs"
+  ],
+  "host_permissions": [
+    "*://*.youtube.com/"
+  ],
+  "background": {
+    "service_worker": "background.js"
+  }
+}
