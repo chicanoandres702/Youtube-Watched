@@ -31,6 +31,12 @@ def update_url_query(url, params):
 # ---
 
 def watch_anonymously(video_url, proxy=None):
+    print(f"Starting FAST, anonymous watch simulation for: {video_url}")
+    if proxy:
+        print(f"Using proxy: {proxy}")
+        
+    script_start_time = time.time()
+
     session = requests.Session()
     session.headers.update({
         "User-Agent": "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/108.0.0.0 Safari/537.36",
@@ -39,14 +45,16 @@ def watch_anonymously(video_url, proxy=None):
     if proxy:
         session.proxies = {"http": proxy, "https": proxy}
 
+    print("Step 1: Fetching video page and initial state...")
     try:
         response = session.get(video_url, timeout=20)
         response.raise_for_status()
         webpage = response.text
     except requests.RequestException as e:
         print(f"Error: Failed to fetch the video page via proxy. Reason: {e}", file=sys.stderr)
-        sys.exit(1)
+        return
 
+    print("Step 2: Deep parsing of page state for tracking parameters...")
     try:
         player_response_match = re.search(r'ytInitialPlayerResponse\s*=\s*({.+?})\s*;', webpage)
         ytcfg_match = re.search(r'ytcfg\.set\s*\(\s*({.+?})\s*\)\s*;', webpage)
@@ -66,22 +74,18 @@ def watch_anonymously(video_url, proxy=None):
             "client_name": ytcfg.get("INNERTUBE_CLIENT_NAME"),
         }
         
-        # *** CRITICAL BUG FIX IS HERE ***
-        # Check if any of the essential values are missing before proceeding.
         if not all(tracking_params.values()):
-            # Find which keys are missing for better error logging
             missing_keys = [key for key, value in tracking_params.items() if value is None]
             raise ValueError(f"Failed to extract critical tracking parameters: {', '.join(missing_keys)}. The proxy is likely blocked.")
 
-        # If all checks pass, convert length to float
         tracking_params["video_length"] = float(tracking_params["video_length_str"])
             
     except (ValueError, json.JSONDecodeError) as e:
         print(f"Error: Could not parse page state. Reason: {e}", file=sys.stderr)
-        sys.exit(1)
+        return
         
+    print("Step 3: Preparing simulated viewing session...")
     cpn = ''.join(random.choice(string.ascii_letters + string.digits + '-_') for _ in range(16))
-    session_start_time = time.time()
     
     static_ping_params = {
         'ns': 'yt', 'el': 'detailpage', 'docid': tracking_params['video_id'], 'ver': '2',
@@ -90,31 +94,79 @@ def watch_anonymously(video_url, proxy=None):
         'len': str(tracking_params['video_length']), 'vis': '1', 'state': 'playing', 'fmt': '247',
     }
 
+    print("Step 4: Calculating virtual timestamps and sending all pings in a burst...")
     ping_interval_seconds = 15
     num_pings = min(4, int(tracking_params['video_length'] // ping_interval_seconds))
-    time.sleep(ping_interval_seconds * num_pings)
-    
+    all_pings = []
+    for i in range(1, num_pings + 1):
+        simulated_watch_time = i * ping_interval_seconds
+        virtual_real_time_ms = int(simulated_watch_time * 1000)
+        dynamic_ping_params = {
+            'cmt': f"{simulated_watch_time:.3f}", 'rt': f"{(virtual_real_time_ms / 1000):.3f}", 'lact': str(virtual_real_time_ms),
+        }
+        all_pings.append({**static_ping_params, **dynamic_ping_params})
+
     final_cmt = tracking_params['video_length']
-    relative_time_ms = int((time.time() - session_start_time) * 1000)
+    virtual_real_time_ms = int(final_cmt * 1000)
     final_ping_params = {
         **static_ping_params,
-        'cmt': f"{final_cmt:.3f}", 'rt': f"{(relative_time_ms / 1000):.3f}",
-        'lact': str(relative_time_ms), 'state': 'ended'
+        'cmt': f"{final_cmt:.3f}", 'rt': f"{(virtual_real_time_ms / 1000):.3f}",
+        'lact': str(virtual_real_time_ms), 'state': 'ended'
     }
-    final_ping_url = update_url_query(tracking_params['base_url'], final_ping_params)
+    all_pings.append(final_ping_params)
 
-    try:
-        session.get(final_ping_url, timeout=20)
-    except requests.RequestException as e:
-        print(f"Warning: The final ping failed to send: {e}", file=sys.stderr)
-        
-    # If we reach here, the script was successful. Exit with code 0.
-    # The manager script will see this as a SUCCESS.
-    sys.exit(0)
+    for i, ping_data in enumerate(all_pings):
+        ping_url = update_url_query(tracking_params['base_url'], ping_data)
+        print(f"   - Sending Ping {i+1}/{len(all_pings)} (State: {ping_data['state']}, Time: {ping_data['cmt']}s)...")
+        try:
+            session.get(ping_url, timeout=20)
+        except requests.RequestException as e:
+            print(f"   - Warning: A ping failed to send: {e}", file=sys.stderr)
+
+    script_end_time = time.time()
+    total_duration = script_end_time - script_start_time
+    
+    print(f"\n✅ Success! Anonymous simulation complete in {total_duration:.2f} seconds.")
+
+    return
+
+import threading
+from queue import Queue
+
+def worker(q, video_url, proxy):
+    while True:
+        item = q.get()
+        if item is None:
+            break
+        # print(f"Starting view {item}")
+        watch_anonymously(video_url, proxy)
+        # print(f"Finished view {item}")
+        q.task_done()
 
 if __name__ == '__main__':
     parser = argparse.ArgumentParser()
     parser.add_argument('video_url')
     parser.add_argument('--proxy')
+    parser.add_argument('--threads', type=int, default=15, help='Number of threads to use.')
+    parser.add_argument('--views', type=int, default=100, help='Number of views to perform.')
     args = parser.parse_args()
-    watch_anonymously(args.video_url, args.proxy)
+    
+    q = Queue()
+    for i in range(args.views):
+        q.put(i)
+        
+    threads = []
+    for i in range(args.threads):
+        thread = threading.Thread(target=worker, args=(q, args.video_url, args.proxy))
+        thread.start()
+        threads.append(thread)
+        
+    q.join()
+    
+    # stop workers
+    for i in range(args.threads):
+        q.put(None)
+    for thread in threads:
+        thread.join()
+        
+    print("All views complete.")

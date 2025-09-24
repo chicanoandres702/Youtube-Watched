@@ -144,6 +144,17 @@ def watch_fast_with_cookies_and_proxy(video_url, cookie_file, proxy=None):
     
     print(f"\n✅ Success! Authenticated simulation complete in {total_duration:.2f} seconds.")
 
+import threading
+from queue import Queue
+
+def worker(q, video_url, cookies, proxy):
+    while True:
+        item = q.get()
+        if item is None:
+            break
+        watch_fast_with_cookies_and_proxy(video_url, cookies, proxy)
+        q.task_done()
+
 if __name__ == '__main__':
     parser = argparse.ArgumentParser(
         description="A FAST, authenticated script to simulate watching a YouTube video, with proxy support.",
@@ -152,6 +163,25 @@ if __name__ == '__main__':
     parser.add_argument('video_url', help='The full URL of the YouTube video to watch.')
     parser.add_argument('--cookies', required=True, metavar='FILE', help='Path to your cookies file (cookies.txt).')
     parser.add_argument('--proxy', metavar='URL', help='Proxy to use for the connection (e.g., http://user:pass@host:port or socks5://host:port).')
+    parser.add_argument('--threads', type=int, default=15, help='Number of threads to use.')
+    parser.add_argument('--views', type=int, default=100, help='Number of views to perform.')
     
     args = parser.parse_args()
-    watch_fast_with_cookies_and_proxy(args.video_url, args.cookies, args.proxy)
+    
+    q = Queue()
+    for i in range(args.views):
+        q.put(i)
+        
+    threads = []
+    for i in range(args.threads):
+        thread = threading.Thread(target=worker, args=(q, args.video_url, args.cookies, args.proxy))
+        thread.start()
+        threads.append(thread)
+        
+    q.join()
+    
+    # stop workers
+    for i in range(args.threads):
+        q.put(None)
+    for thread in threads:
+        thread.join()
