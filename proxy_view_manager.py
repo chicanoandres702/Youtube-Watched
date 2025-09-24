@@ -2,7 +2,6 @@
 # coding: utf-8
 
 import argparse
-import json
 import subprocess
 import sys
 import threading
@@ -112,7 +111,7 @@ def main():
     )
     parser.add_argument('video_url', help='The full URL of the YouTube video.')
     parser.add_argument('--threads', type=int, default=10, help='Number of concurrent threads to use (default: 10).')
-    args = parser.parse_args()
+    args = parser.parse__args()
 
     # Phase 1
     proxies_to_check = fetch_proxies()

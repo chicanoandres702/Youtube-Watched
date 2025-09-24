@@ -4,7 +4,7 @@ This project contains a set of tools for interacting with YouTube, including Pyt
 
 ## Features
 
-*   **`view_count.py` / `view_count.exe`**: A script to simulate watching a YouTube video with authentication (cookies) and proxy support. It uses multithreading to simulate multiple views concurrently.
+*   **`view_count.py` / `view_count.exe`**: A script to simulate watching a YouTube video with authentication (cookies) and proxy support. It uses multithreading to simulate multiple views concurrently. It can be run as a command-line tool or as a GUI application.
 *   **`watch_anonymously.py` / `watch_anonymously.exe`**: A script to simulate watching a YouTube video anonymously, with proxy support. It also uses multithreading to simulate multiple views.
 *   **Browser Extension**: A simple browser extension that adds an "Export Cookies" button to YouTube pages, allowing you to download your cookies as a `cookies.txt` file.
 
@@ -26,7 +26,11 @@ The executables (`view_count.exe` and `watch_anonymously.exe`) can be run from t
 
 #### `view_count.exe`
 
-This script simulates watching a YouTube video with authentication.
+This script simulates watching a YouTube video with authentication. It can be run in two modes:
+
+**1. Command-Line Interface (CLI)**
+
+To run the script from the command line, provide the necessary arguments:
 
 ```bash
 view_count.exe <video_url> --cookies <path_to_cookies.txt> [--proxy <proxy_url>] [--threads <num_threads>] [--views <num_views>]
@@ -37,6 +41,24 @@ view_count.exe <video_url> --cookies <path_to_cookies.txt> [--proxy <proxy_url>]
 *   `--proxy` (optional): Proxy to use for the connection (e.g., `http://user:pass@host:port`).
 *   `--threads` (optional): Number of threads to use (default: 15).
 *   `--views` (optional): Number of views to perform (default: 100).
+
+**2. Graphical User Interface (GUI)**
+
+To launch the GUI, run the executable without any command-line arguments:
+
+```bash
+view_count.exe
+```
+
+The GUI provides an easy-to-use interface with the following options:
+
+*   **Video URL**: The full URL of the YouTube video.
+*   **Cookies File**: Path to your `cookies.txt` file. You can use the "Browse" button to select the file.
+*   **Proxy (optional)**: Proxy to use for the connection.
+*   **Threads**: Number of threads to use (default: 15).
+*   **Views**: Number of views to perform (default: 100).
+*   **Run Button**: Starts the view simulation.
+*   **Output Text Area**: Displays the output from the script in real-time.
 
 #### `watch_anonymously.exe`
 
