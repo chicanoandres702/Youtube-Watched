@@ -9,6 +9,10 @@ import string
 import sys
 import time
 from urllib.parse import urlencode, urlparse, parse_qs as url_parse_qs, urlunparse
+import tkinter as tk
+from tkinter import ttk, scrolledtext
+import threading
+from queue import Queue
 
 import requests
 
@@ -28,7 +32,6 @@ def update_url_query(url, params):
     query.update(params)
     url_parts[4] = urlencode(query, doseq=True)
     return urlunparse(url_parts)
-# ---
 
 def watch_anonymously(video_url, proxy=None):
     print(f"Starting FAST, anonymous watch simulation for: {video_url}")
@@ -130,20 +133,99 @@ def watch_anonymously(video_url, proxy=None):
 
     return
 
-import threading
-from queue import Queue
+# --- GUI Code ---
+
+class TextRedirector(object):
+    def __init__(self, widget):
+        self.widget = widget
+
+    def write(self, str):
+        self.widget.insert(tk.END, str)
+        self.widget.see(tk.END)
+
+    def flush(self):
+        pass
 
 def worker(q, video_url, proxy):
     while True:
         item = q.get()
         if item is None:
             break
-        # print(f"Starting view {item}")
         watch_anonymously(video_url, proxy)
-        # print(f"Finished view {item}")
         q.task_done()
 
-if __name__ == '__main__':
+def wait_for_queue(q, threads, num_threads):
+    q.join()
+    for i in range(num_threads):
+        q.put(None)
+    for thread in threads:
+        thread.join()
+    print("\nAll views complete.")
+
+def run_script_gui(video_url, proxy, num_threads, num_views):
+    q = Queue()
+    for i in range(num_views):
+        q.put(i)
+        
+    threads = []
+    for i in range(num_threads):
+        thread = threading.Thread(target=worker, args=(q, video_url, proxy))
+        thread.daemon = True
+        thread.start()
+        threads.append(thread)
+        
+    wait_thread = threading.Thread(target=wait_for_queue, args=(q, threads, num_threads))
+    wait_thread.daemon = True
+    wait_thread.start()
+
+def main_gui():
+    root = tk.Tk()
+    root.title("Watch Anonymously GUI")
+
+    main_frame = ttk.Frame(root, padding="10")
+    main_frame.grid(row=0, column=0, sticky=(tk.W, tk.E, tk.N, tk.S))
+
+    # Video URL
+    ttk.Label(main_frame, text="Video URL:").grid(row=0, column=0, sticky=tk.W)
+    video_url_entry = ttk.Entry(main_frame, width=50)
+    video_url_entry.grid(row=0, column=1, columnspan=2, sticky=(tk.W, tk.E))
+
+    # Proxy
+    ttk.Label(main_frame, text="Proxy (optional):").grid(row=1, column=0, sticky=tk.W)
+    proxy_entry = ttk.Entry(main_frame, width=50)
+    proxy_entry.grid(row=1, column=1, columnspan=2, sticky=(tk.W, tk.E))
+
+    # Threads and Views
+    ttk.Label(main_frame, text="Threads:").grid(row=2, column=0, sticky=tk.W)
+    threads_entry = ttk.Entry(main_frame, width=10)
+    threads_entry.grid(row=2, column=1, sticky=tk.W)
+    threads_entry.insert(0, "15")
+
+    ttk.Label(main_frame, text="Views:").grid(row=3, column=0, sticky=tk.W)
+    views_entry = ttk.Entry(main_frame, width=10)
+    views_entry.grid(row=3, column=1, sticky=tk.W)
+    views_entry.insert(0, "100")
+
+    # Run Button
+    run_button = ttk.Button(main_frame, text="Run", command=lambda: run_script_gui(
+        video_url_entry.get(),
+        proxy_entry.get(),
+        int(threads_entry.get()),
+        int(views_entry.get())
+    ))
+    run_button.grid(row=4, column=1, pady=10)
+
+    # Output Text
+    output_text = scrolledtext.ScrolledText(main_frame, wrap=tk.WORD, width=60, height=20)
+    output_text.grid(row=5, column=0, columnspan=3)
+
+    # Redirect stdout and stderr
+    sys.stdout = TextRedirector(output_text)
+    sys.stderr = TextRedirector(output_text)
+
+    root.mainloop()
+
+def main_cli():
     parser = argparse.ArgumentParser()
     parser.add_argument('video_url')
     parser.add_argument('--proxy')
@@ -170,3 +252,10 @@ if __name__ == '__main__':
         thread.join()
         
     print("All views complete.")
+
+if __name__ == '__main__':
+    print(sys.argv)
+    if len(sys.argv) > 1:
+        main_cli()
+    else:
+        main_gui()
